@@ -1,0 +1,126 @@
+pip install SQLAlchemy
+
+---CRIAÇÃO DATABASE COM ENCONDING PT_BR PARA EVITAR CONFLITOS DE ENCONDING
+create database dbCnpjEtl ENCODING = 'UTF8' LOCALE = "pt_BR.UTF-8" LC_COLLATE = "pt_BR.UTF-8";
+
+
+----****CRIAÇÃO FUNÇÃO DOWNLOAD CONTROLE***
+CREATE OR REPLACE FUNCTION public.fn_indata(pdata integer)
+RETURNS integer AS '
+BEGIN
+    IF EXISTS (SELECT 1 FROM public.tcnpjctrl WHERE DDATAREF = $1) THEN
+        RETURN 1;
+    ELSE
+        RETURN 0;
+    END IF;
+END;' 
+LANGUAGE plpgsql
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+
+
+---CRIAÇÃO TABELA CONTROLE CNPJ
+CREATE TABLE public.tcnpjctrl (
+	ndwldidkey integer NOT NULL GENERATED ALWAYS AS IDENTITY,
+	ddataref integer NOT NULL,
+	ddwldbase integer NULL,
+	cflagcrtl varchar(1) NULL,
+	CONSTRAINT pk_tcnpjctrl PRIMARY KEY (ndwldidkey),
+	CONSTRAINT "IXU_tcnpjctrl_dDataRef" UNIQUE (ddataref)
+);
+COMMENT ON TABLE public.tcnpjctrl IS 'Tabela Controle de downloads arquivos CNPJ';
+
+-- Column comments
+COMMENT ON COLUMN public.tcnpjctrl.ndwldidkey IS 'Chave única para identificação na tabela';
+COMMENT ON COLUMN public.tcnpjctrl.ddataref IS 'Data-base para controle do que já foi baixado';
+COMMENT ON COLUMN public.tcnpjctrl.ddwldbase IS 'Data/dia em que as bases foram baixadas pelo pipeline';
+COMMENT ON COLUMN public.tcnpjctrl.cflagcrtl IS 'Flag para controle de execução, se 1 = Baixado, e 0 = Disponível';
+
+
+
+--CRIAÇAO DA GOLD
+CREATE TABLE dbCnpjEtl.public.tcnpjucs (
+ nroCnpjBase integer 
+,nroCnpjOrdm smallint
+,nroDigCnpj smallint
+,nomeFant varchar(200)
+,codSttCad smallint
+,dataSttCad integer
+,codMtvoSttCad smallint
+,dataIncAtvd integer
+,codCnaePrnc integer
+,cCep integer
+,nroLogrd integer
+,iUF varchar(2)
+,codMunEmp integer
+,nroDDD1 smallint
+,nroTel1 integer
+,iEmail varchar(200)
+,razSocEmp varchar(200)
+,codPrtEmp smallint
+,codNatJur integer
+,flagSmpl varchar(1)
+,cOpcMei varchar(1)
+,iNomeMuncp varchar(100)
+,iCnaes varchar(200)
+);
+COMMENT ON TABLE public.tcnpjucs IS 'Tabela Gold Relacao CNPJs';
+COMMENT ON COLUMN public.tcnpjucs.nroCnpjBase IS 'Chave unica para identificacao na tabela';
+
+
+CREATE TABLE public.tCnpjSocios (
+nroCnpjBase integer NULL,
+nomeSocio varchar(200) NULL
+cpfCnpjSocio bigint NULL
+codQlfcSocio smallint NULL
+)
+CREATE UNIQUE INDEX ixtCnpjSocios ON tCnpjSocios (nroCnpjBase) INCLUDE (nomeSocio, cpfCnpjSocio);
+
+
+CREATE TABLE public.tcnpjbigcities (
+ iNomeMuncp varchar(100)
+,QtdEmps integer
+);
+COMMENT ON TABLE public.tcnpjbigcities IS 'Tabela municipios com mais CNPJs';
+
+
+
+CREATE TABLE public.tcnpjbigcnaes (
+ iCnaes varchar(100)
+,QtdEmps integer
+);
+COMMENT ON TABLE public.tcnpjbigcnaes IS 'Tabela Ramos(Cnaes) com mais CNPJs';
+
+
+create view public.vwMailingCnpj as
+SELECT 
+"nroCnpjBase", "nroCnpjOrdm", "nroDigCnpj", "nomeFant", "dataSttCad", 
+"dataIncAtvd", "codCnaePrnc", "cCep", "nroLogrd", "iUF", "nroDDD1", "nroTel1", lower("iEmail") iEmail, 
+"razSocEmp", "codPrtEmp", "flagSmpl", "cOpcMei", "iNomeMuncp", "iCnaes"
+FROM public.tcnpjucs
+where "iEmail" is not null and "codSttCad" = 2
+;
+
+---DADOS COM BASE NO DOCUMENTO FORNECIDO PELA RECEITA EM https://www.gov.br/receitafederal/dados/cnpj-metadados.pdf
+CREATE TABLE dimPrtEmp (
+    codPrtEmp smallint,
+    idescPrtEmp varchar(50)
+);
+
+insert into public.dimPrtEmp values(0, 'NÃO INFORMADO');
+insert into public.dimPrtEmp values(1, 'MICRO EMPRESA');
+insert into public.dimPrtEmp values(3, 'EMPRESA DE PEQUENO PORTE');
+insert into public.dimPrtEmp values(5, 'DEMAIS');
+
+
+CREATE TABLE dimSttsCad (
+    codSttCad smallint,
+    idescSttCad varchar(20)
+);
+
+insert into public.dimsttscad values (1, 'NULA');
+insert into public.dimsttscad values (2, 'ATIVA');
+insert into public.dimsttscad values (3, 'SUSPENSA');
+insert into public.dimsttscad values (4, 'INAPTA');
+insert into public.dimsttscad values (8, 'BAIXADA');

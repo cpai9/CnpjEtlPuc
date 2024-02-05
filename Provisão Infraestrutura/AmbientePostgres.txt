@@ -1,0 +1,11 @@
+#No terminal shell crie um usuário postgres
+sudo useradd postgres
+
+#Para instalar postgres pode ser feito via terminal, para isso execute os comandos:
+sudo apt-get update
+sudo apt-get -y install postgresql
+
+#será baixado a ultima versão mais recente
+
+#para chamar a aplicação, no terminal pode ser feito via
+sudo -u postgres psql

@@ -1,0 +1,174 @@
+#INSTALAÇÃO DE DEPENDENCIAS LINUX E PYTHON
+sudo apt install software-properties-common
+
+sudo apt-add-repository universe
+
+sudo apt-get update
+
+sudo apt install python-setuptools
+
+sudo apt install python3-venv
+
+cd /opt && sudo mkdir airflow && cd /opt/airflow
+
+#CRIAÇÃO DE VENV PARA EMPACOTAMENTO E ATUALIZAÇÃO DE VERSOES DO PYTHON/PIP
+sudo python3 -m venv vAirflowEnv
+
+source /opt/airflow/vAirflowEnv/bin/activate
+
+#ATUALIZAÇÃO DE COMPONENTES PYTHON
+
+sudo apt-get install python3-pip
+
+sudo apt-get install python3-dev
+
+pip3 install wheel
+
+pip install psycopg2-binary --driver usado para o python reconhecer o banco de dados PostgreSQL que utilizaremos no projeto
+
+#DEPENDENCIAS DO AIRFLOW NO LINUX
+sudo apt install libmysqlclient-dev
+
+sudo apt install libssl-dev
+
+sudo apt install libkrb5-dev
+
+sudo apt-get install -y --no-install-recommends \
+        freetds-bin \
+        krb5-user \
+        ldap-utils \
+        libffi6 \
+        libsasl2-2 \
+        libsasl2-modules \
+        libssl1.1 \
+        locales  \
+        lsb-release \
+        sasl2-bin \
+        unixodbc
+
+#INSTALAÇÃO AIRFLOW
+
+AIRFLOW_VERSION=2.7.0
+PYTHON_VERSION="$(python --version | cut -d " " -f 2 | cut -d "." -f 1-2)"
+CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+
+sudo pip install "apache-airflow[postgres,google]==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}"
+
+#Verificar se o Airflow foi instalado corretamente por meio do:
+ airflow info
+ airflow db init
+
+#por meio do comando airflow info validamos o caminho para apontar a variavel AIRFLOW_HOME
+ export AIRFLOW_HOME=/opt/airflow/vAirflowEnv
+
+#Antes de iniciar o airflow criamos um usuário chamado "airflow" no postgree a ser utilizado pela aplicação segregando funções e #também cria-se um database no servidor uma base chamada "airflow" por recomendação do desenvolvedor, sendo owner deste o usuário #recém-criado, e nele será apontado como database da aplicação no arquivo airflow.cfg que pode ser consultado o caminho por meio #do comando "airflow info".
+
+#No postgres
+ CREATE USER airflow PASSWORD 'airflow'; CREATE ROLE
+ CREATE DATABASE airflow;
+ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO airflow;
+
+
+#Mude as configurações do Metadata DB do Airflow;
+# Abra o arquivo airflow.cfg (se precisar, verifique com o comando "airflow info" a localização do mesmo)
+#Procure pela linha que contém: sql_alchemy_conn e altere para:
+ 
+postgresql+psycopg2://airflow:airflow@localhost:5433/airflow
+
+#procure também pela linha executor = SequentialExecutor, caso não exista adicione, ou altere para:
+ executor = LocalExecutor
+
+
+#execute "airflow db check" no terminal
+
+#Com essas alterações garantiremos que o postgres será, e que as DAGs sejam executadas com paralelismo.
+
+#execute o comando "airflow db init"
+
+#CRIAÇÃO USUÁRIO AIRFLOW ADMIN VIA BASH
+ airflow users create -u uairflow -p uairflow -f Operador -l Linux -r Admin -e <seu_email>
+
+#rebootar linux
+ reboot 
+
+#ao retornar execute no terminal
+ sudo airflow db init
+ sudo airflow info e valide as alterações aplicadas no banco e no executor.
+
+#Por fim em dois terminais distintos, suba a aplicação por:
+airflow webserver
+airflow scheduler 
+
+#acesso pelo browser o caminho http://localhost:8080/home e logue com o usuario uairflow 
+
+********** ADICIONAR COMANDOS PARA A APLICAÇÃO TORNAR-SE UM SERVIÇO ***********
+#Uma vez validado a subida e operação do Airflow podemos configurar para carrega-lo como um serviço, desta forma dispensamos #intervenção manual, automatizando seu inicio. Neste tem-se como boa prática utilizar usuários e grupos especificos para segregação #de função e gestão do ambiente. 
+
+#Para tal devemos criar 2 serviços semelhantes. , um para o airflow webserver, e outro para o airflow scheduler.
+
+#devemos criar um arquivo para o serviço do airflow webserver, sendo 
+sudo touch /etc/systemd/system/airflow-webserver.service
+
+#abrir arquivo via;
+sudo nano /etc/systemd/system/airflow-webserver.service
+
+###adicionar o script :
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements. See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership. The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# “License”); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License at
+# 
+# http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# “AS IS” BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations
+# under the License.
+[Unit]
+Description=Airflow webserver daemon
+After=network.target postgresql.service mysql.service
+Wants=postgresql.service mysql.service
+[Service]
+EnvironmentFile=/etc/environment
+User=uoperator  #iremos utilizar este usuário padrão pois estamos centralizando a gestão no mesmo, por conta de permissionamentos e configurações.
+Group=sudo #idem explicação acima.
+Type=simple
+ExecStart= /usr/local/bin/airflow webserver
+Restart=on-failure
+RestartSec=5s
+PrivateTmp=true
+[Install]
+WantedBy=multi-user.target
+
+#Repetir a operação, mas para o serviço do airflow scheduler, sendo 
+sudo touch /etc/systemd/system/airflow-scheduler.service
+
+#Neste ponto recarregamos daemon do linux
+sudo systemctl daemon-reload
+
+#habilitamos os serviços
+sudo systemctl enable airflow-webserver.service
+sudo systemctl enable airflow-scheduler.service
+
+#E os iniciamos por:
+sudo service airflow-webserver start
+sudo service airflow-scheduler start
+
+#Para validar o status executamos
+sudo service airflow-webserver status
+sudo service airflow-scheduler status
+
+Feito isso e observando que ambos serviços estão com status "active (running)" - normalmente em verde - podemos reiniciar a máquina para validar a automatização da aplicação.
+
+*******************************************************************************
+refs:
+https://airflow.apache.org/docs/apache-airflow/stable/start.html
+https://ilegra.com/blog/organizando-o-palco-instalando-e-configurando-o-airflow-localmente/
+https://medium.com/@shahbaz.ali03/run-apache-airflow-as-a-service-on-ubuntu-18-04-server-b637c03f4722
+

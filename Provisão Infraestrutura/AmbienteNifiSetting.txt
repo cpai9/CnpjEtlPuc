@@ -1,0 +1,25 @@
+#Faça o download da versão do nifi pelo site da Apache, no nosso caso foi a versão nifi-1.23.2
+
+#extraia o tar.gz e coloque na pasta /opt
+
+#adicionar JAVA_HOME no arquivo /opt/nifi-1.23.2/bin/nifi-env.sh aplicando:
+export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64/
+
+#No arquivo de propriedades do NIFI altere a porta de conexão caso a porta 8080 já esteja em uso: 
+ /opt/nifi-1.23.2/conf/nifi.properties
+
+#Para efetuar start/stop/run do nifi, execute via sh o arquivo: 
+opt/nifi-1.23.2/bin/nifi.sh
+
+#arquivo de logs para validação de endereço de acesso e usuário/senha, procure por "Generated":
+/opt/nifi-1.23.2/logs/nifi-app.log
+
+#acessar por
+https://127.0.0.1:8443/nifi/login
+
+referencias
+https://medium.com/gbtech/installing-apache-nifi-on-ubuntu-9bca3cfe65d0
+https://pt.linux-console.net/?p=2656
+https://www.youtube.com/watch?v=yBWzNQo_yAs
+https://community.cloudera.com/t5/Support-Questions/Connecting-to-DataSift-HTTPS-API-using-NiFi-GetHTTP/m-p/102276 (Referencia para correção de erro de certificado SSL)
+

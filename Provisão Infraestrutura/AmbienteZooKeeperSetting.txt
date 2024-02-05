@@ -1,0 +1,66 @@
+****Instalando ZooKeeper
+#Crie o usuário via terminal, e atribua privilégios ao mesmo, pois o serviço integra os serviços em comum da Apache
+useradd zookeeper -m
+
+sudo usermod --shell /bin/bash zookeeper  "runas"
+sudo passwd zookeeper  #altera senha, no caso deixamos zookeeper
+sudo usermod -aG sudo zookeeper --add superuser
+sudo getent group sudo
+
+#Crie uma pasta para o zookeeper e descompacte-o conforme os comandos abaixo via terminal:
+sudo mkdir -p /opt/zookeeper
+cd /opt
+sudo tar -xvzf ....
+sudo mv apache-zookeeper-3.8.3-bin zookeeper --renomeia
+sudo chown -R zookeeper:zookeeper /opt/zookeeper
+
+#Para habilitar o zookeeper em modo Standalone, abrimos o arquivo /opt/zookeeper/conf/zoo.cfg e adicione as linhas abaixo:
+tickTime=2100
+dataDir=/opt/zookeeper
+dataLogDir=/opt/zookeeper/logrepo
+clientPort=2181
+maxClientCnxns=60
+admin.serverPort=8089  #pode ser outra porta desde que não esteja sendo usada - Evita exception por outra aplicação usando a porta 8080
+#secureClientPort=2281
+
+#Inicia o zookeeper
+cd /opt/zookeeper
+bin/zkServer.sh start
+
+#Valide via terminal se o zookeeper esta operando adequadamente 
+ss -ntpl | grep 2181 #verificar escuta do zookeeper
+jps
+nc -vz localhost 2181
+bin/zkCli.sh -server 127.0.0.1:2181  #conecta no localserver
+
+
+#Necessário criar um arquivo para o serviço do zookeeper, sendo:
+Systemd Service
+sudo nano /etc/systemd/system/zookeeper.service
+
+***Adicione o abaixo
+[Unit]
+Description=Zookeeper Daemon
+Documentation=http://zookeeper.apache.org
+Requires=network.target
+After=network.target
+
+[Service]    
+Type=forking
+WorkingDirectory=/opt/zookeeper
+User=zookeeper
+Group=zookeeper
+ExecStart=/opt/zookeeper/bin/zkServer.sh start /opt/zookeeper/conf/zoo.cfg
+ExecStop=/opt/zookeeper/bin/zkServer.sh stop /opt/zookeeper/conf/zoo.cfg
+ExecReload=/opt/zookeeper/bin/zkServer.sh restart /opt/zookeeper/conf/zoo.cfg
+TimeoutSec=30
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+
+#Execute no terminal para habilitar o serviço
+sudo systemctl daemon-reload
+sudo systemctl start zookeeper
+sudo systemctl enable zookeeper
+sudo systemctl status zookeeper
